@@ -45,6 +45,31 @@
 			path = SpendantUITests;
 			sourceTree = "<group>";
 		};
+		837024B12FCCF1450064418C /* Models */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Models;
+			sourceTree = "<group>";
+		};
+		837024C42FCCF1D50064418C /* Services */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		837024C82FCCF1EB0064418C /* Utilities */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		837024CC2FCCF2020064418C /* ViewModels */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		837024D02FCCF21F0064418C /* Views */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Views;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +100,11 @@
 		8370247C2FCCBEB40064418C = {
 			isa = PBXGroup;
 			children = (
+				837024D02FCCF21F0064418C /* Views */,
+				837024CC2FCCF2020064418C /* ViewModels */,
+				837024C82FCCF1EB0064418C /* Utilities */,
+				837024C42FCCF1D50064418C /* Services */,
+				837024B12FCCF1450064418C /* Models */,
 				837024872FCCBEB40064418C /* Spendant */,
 				837024972FCCBEB50064418C /* SpendantTests */,
 				837024A12FCCBEB50064418C /* SpendantUITests */,
@@ -109,6 +139,11 @@
 			);
 			fileSystemSynchronizedGroups = (
 				837024872FCCBEB40064418C /* Spendant */,
+				837024B12FCCF1450064418C /* Models */,
+				837024C42FCCF1D50064418C /* Services */,
+				837024C82FCCF1EB0064418C /* Utilities */,
+				837024CC2FCCF2020064418C /* ViewModels */,
+				837024D02FCCF21F0064418C /* Views */,
 			);
 			name = Spendant;
 			packageProductDependencies = (
