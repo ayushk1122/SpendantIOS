@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		837025492FCE719B0064418C /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 837025482FCE719B0064418C /* LinkKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		837024952FCCBEB50064418C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -29,9 +33,22 @@
 		8370249E2FCCBEB50064418C /* SpendantUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpendantUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		837025422FCE6C8C0064418C /* Exceptions for "Spendant" folder in "Spendant" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 837024842FCCBEB40064418C /* Spendant */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		837024872FCCBEB40064418C /* Spendant */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				837025422FCE6C8C0064418C /* Exceptions for "Spendant" folder in "Spendant" target */,
+			);
 			path = Spendant;
 			sourceTree = "<group>";
 		};
@@ -77,6 +94,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				837025492FCE719B0064418C /* LinkKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -108,6 +126,7 @@
 				837024872FCCBEB40064418C /* Spendant */,
 				837024972FCCBEB50064418C /* SpendantTests */,
 				837024A12FCCBEB50064418C /* SpendantUITests */,
+				837025472FCE719B0064418C /* Frameworks */,
 				837024862FCCBEB40064418C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,6 +139,13 @@
 				8370249E2FCCBEB50064418C /* SpendantUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		837025472FCE719B0064418C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -147,6 +173,7 @@
 			);
 			name = Spendant;
 			packageProductDependencies = (
+				837025482FCE719B0064418C /* LinkKit */,
 			);
 			productName = Spendant;
 			productReference = 837024852FCCBEB40064418C /* Spendant.app */;
@@ -230,6 +257,9 @@
 			);
 			mainGroup = 8370247C2FCCBEB40064418C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				837025432FCE70CB0064418C /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 837024862FCCBEB40064418C /* Products */;
 			projectDirPath = "";
@@ -435,6 +465,7 @@
 				DEVELOPMENT_TEAM = NJ3A658XNY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Spendant/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -467,6 +498,7 @@
 				DEVELOPMENT_TEAM = NJ3A658XNY;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Spendant/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -613,6 +645,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		837025432FCE70CB0064418C /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/plaid/plaid-link-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.4.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		837025482FCE719B0064418C /* LinkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 837025432FCE70CB0064418C /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
+			productName = LinkKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8370247D2FCCBEB40064418C /* Project object */;
 }

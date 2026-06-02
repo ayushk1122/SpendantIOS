@@ -11,7 +11,12 @@ struct ProfileView: View {
                         ProfileRow(title: "Settings", subtitle: "Manage app preferences", icon: "gearshape.fill")
                         ProfileRow(title: "Protected Balance", subtitle: "Set your minimum checking buffer", icon: "shield.fill")
                         ProfileRow(title: "Default Allocation", subtitle: "Customize savings, investing, and buffer splits", icon: "slider.horizontal.3")
-                        ProfileRow(title: "Account Connections", subtitle: "Bank connections coming later", icon: "link")
+                        NavigationLink {
+                            PlaidConnectionView()
+                        } label: {
+                            ProfileRow(title: "Account Connections", subtitle: "Connect and test bank data", icon: "link")
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()
