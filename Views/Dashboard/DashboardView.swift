@@ -11,11 +11,29 @@ struct DashboardView: View {
                     summaryRow
                     breakdownSection
                     destinationsCard
+
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .padding()
+                    }
+
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
                 }
                 .padding()
             }
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .task {
+                await viewModel.loadDashboardSummary()
+            }
         }
     }
 
@@ -73,7 +91,6 @@ struct DashboardView: View {
             } label: {
                 BreakdownCard(
                     title: "Income",
-                    subtitle: "Paychecks, deposits, side income",
                     amount: viewModel.incomeTotal,
                     icon: "arrow.down.circle.fill",
                     accentColor: .green,
@@ -87,7 +104,6 @@ struct DashboardView: View {
             } label: {
                 BreakdownCard(
                     title: "Housing",
-                    subtitle: "Rent, mortgage, utilities",
                     amount: viewModel.housingTotal,
                     icon: "house.fill",
                     accentColor: .red,
@@ -101,7 +117,6 @@ struct DashboardView: View {
             } label: {
                 BreakdownCard(
                     title: "Expenses",
-                    subtitle: "Food, shopping, transport",
                     amount: viewModel.expenseTotal,
                     icon: "creditcard.fill",
                     accentColor: .red,
@@ -115,7 +130,6 @@ struct DashboardView: View {
             } label: {
                 BreakdownCard(
                     title: "Subscriptions",
-                    subtitle: "Recurring monthly charges",
                     amount: viewModel.subscriptionsTotal,
                     icon: "repeat.circle.fill",
                     accentColor: .red,
@@ -221,7 +235,6 @@ struct MiniSummaryCard: View {
 
 struct BreakdownCard: View {
     let title: String
-    let subtitle: String
     let amount: Double
     let icon: String
     let accentColor: Color

@@ -14,7 +14,7 @@ final class UserSettings {
 
     init(
         checkingBalance: Double = 5000,
-        minimumCheckingBuffer: Double = 2000,
+        minimumCheckingBuffer: Double = 30,
         estimatedVariableSpendingRemaining: Double = 1200,
         savingsAllocationPercent: Double = 0.50,
         investmentAllocationPercent: Double = 0.35,

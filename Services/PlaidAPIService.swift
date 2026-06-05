@@ -19,9 +19,13 @@ final class PlaidAPIService {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let data = try await performRequest(request)
-
-        let decoded = try JSONDecoder().decode(LinkTokenResponse.self, from: data)
-        return decoded.linkToken
+        return try JSONDecoder().decode(LinkTokenResponse.self, from: data).linkToken
+    }
+    
+    func fetchDashboardSummary() async throws -> DashboardSummaryResponse {
+        let url = makeURL(path: "/api/dashboard/summary")
+        let data = try await performRequest(URLRequest(url: url))
+        return try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
     }
 
     func exchangePublicToken(_ publicToken: String) async throws {
@@ -37,31 +41,44 @@ final class PlaidAPIService {
         )
 
         request.httpBody = try JSONEncoder().encode(body)
-
         _ = try await performRequest(request)
     }
 
+    func fetchAccountsDecoded() async throws -> [PlaidAccount] {
+        let url = makeURL(path: "/api/plaid/accounts")
+        let data = try await performRequest(URLRequest(url: url))
+        return try JSONDecoder().decode(PlaidAccountsResponse.self, from: data).accounts
+    }
+
+    func fetchBalancesDecoded() async throws -> [PlaidAccount] {
+        let url = makeURL(path: "/api/plaid/balances")
+        let data = try await performRequest(URLRequest(url: url))
+        return try JSONDecoder().decode(PlaidAccountsResponse.self, from: data).accounts
+    }
+
+    func fetchTransactionsDecoded() async throws -> [PlaidTransaction] {
+        let url = makeURL(path: "/api/plaid/transactions")
+        let data = try await performRequest(URLRequest(url: url))
+        let decoded = try JSONDecoder().decode(PlaidTransactionsResponse.self, from: data)
+        return decoded.allTransactions
+    }
+
+    // Keep these for debug screen
     func fetchAccounts() async throws -> String {
         let url = makeURL(path: "/api/plaid/accounts")
-        let request = URLRequest(url: url)
-
-        let data = try await performRequest(request)
+        let data = try await performRequest(URLRequest(url: url))
         return prettyJSON(from: data)
     }
 
     func fetchBalances() async throws -> String {
         let url = makeURL(path: "/api/plaid/balances")
-        let request = URLRequest(url: url)
-
-        let data = try await performRequest(request)
+        let data = try await performRequest(URLRequest(url: url))
         return prettyJSON(from: data)
     }
 
     func fetchTransactions() async throws -> String {
         let url = makeURL(path: "/api/plaid/transactions")
-        let request = URLRequest(url: url)
-
-        let data = try await performRequest(request)
+        let data = try await performRequest(URLRequest(url: url))
         return prettyJSON(from: data)
     }
 
