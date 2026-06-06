@@ -1,6 +1,8 @@
 import SwiftUI
+import SwiftData
 
 struct DashboardView: View {
+    @Query(sort: \UserSettings.createdAt) private var settings: [UserSettings]
     @StateObject private var viewModel = DashboardViewModel()
 
     var body: some View {
@@ -32,7 +34,17 @@ struct DashboardView: View {
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .task {
-                await viewModel.loadDashboardSummary()
+                await viewModel.loadDashboardSummary(settings: settings.first)
+            }
+            .onChange(of: settings.first?.minimumCheckingBuffer) { _, _ in
+                Task {
+                    await viewModel.loadDashboardSummary(settings: settings.first)
+                }
+            }
+            .onChange(of: settings.first?.savingsAllocationPercent) { _, _ in
+                Task {
+                    await viewModel.loadDashboardSummary(settings: settings.first)
+                }
             }
         }
     }
@@ -155,9 +167,13 @@ struct DashboardView: View {
 
                 Spacer()
 
-                Text("Customize")
-                    .font(.caption.bold())
-                    .foregroundStyle(.green)
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Text("Customize")
+                        .font(.caption.bold())
+                        .foregroundStyle(.green)
+                }
             }
 
             ForEach(viewModel.destinations) { destination in

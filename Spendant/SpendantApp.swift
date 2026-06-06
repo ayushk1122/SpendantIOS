@@ -5,7 +5,7 @@ import SwiftData
 struct SpendantApp: App {
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            AppRootView()
                 .preferredColorScheme(.dark)
         }
         .modelContainer(for: [

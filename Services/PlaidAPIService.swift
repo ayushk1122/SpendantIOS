@@ -28,7 +28,7 @@ final class PlaidAPIService {
         return try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
     }
 
-    func exchangePublicToken(_ publicToken: String) async throws {
+    func exchangePublicToken(_ linkSuccess: PlaidLinkSuccess) async throws {
         let url = APIConfig.baseURL.appending(path: "/api/plaid/exchange-public-token")
 
         var request = URLRequest(url: url)
@@ -36,18 +36,45 @@ final class PlaidAPIService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body = PublicTokenRequest(
-            publicToken: publicToken,
-            clientUserID: APIConfig.clientUserID
+            publicToken: linkSuccess.publicToken,
+            clientUserID: APIConfig.clientUserID,
+            institutionID: linkSuccess.institutionID,
+            institutionName: linkSuccess.institutionName
         )
 
         request.httpBody = try JSONEncoder().encode(body)
         _ = try await performRequest(request)
     }
 
-    func fetchAccountsDecoded() async throws -> [PlaidAccount] {
+    func fetchItems() async throws -> [PlaidItemSummary] {
+        let url = makeURL(path: "/api/plaid/items")
+        let data = try await performRequest(URLRequest(url: url))
+        return try JSONDecoder().decode(PlaidItemsResponse.self, from: data).items
+    }
+
+    func deleteItem(_ itemID: String) async throws {
+        let url = makeURL(path: "/api/plaid/items/\(itemID)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        _ = try await performRequest(request)
+    }
+
+    func clearAllLinkedItems() async throws {
+        let items = try await fetchItems()
+        for item in items {
+            try await deleteItem(item.itemID)
+        }
+    }
+
+    func fetchAccountsResponse() async throws -> PlaidAccountsResponse {
         let url = makeURL(path: "/api/plaid/accounts")
         let data = try await performRequest(URLRequest(url: url))
-        return try JSONDecoder().decode(PlaidAccountsResponse.self, from: data).accounts
+        return try JSONDecoder().decode(PlaidAccountsResponse.self, from: data)
+    }
+
+    func fetchAccountsDecoded() async throws -> [PlaidAccount] {
+        try await fetchAccountsResponse().accounts
     }
 
     func fetchBalancesDecoded() async throws -> [PlaidAccount] {

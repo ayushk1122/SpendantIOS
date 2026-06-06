@@ -15,8 +15,22 @@ final class PlaidConnectionViewModel: ObservableObject {
     @Published var statusMessage: String = "Not connected"
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    @Published var didLinkBank: Bool = false
+    @Published var accounts: [PlaidAccount] = []
+    @Published var institutions: [PlaidInstitutionAccounts] = []
+    @Published var linkedItems: [PlaidItemSummary] = []
 
     private var handler: Handler?
+
+    var hasConnectedInstitutions: Bool {
+        !institutions.isEmpty || !accounts.isEmpty || didLinkBank
+    }
+
+    func prepareLinkSession() async {
+        linkConfiguration = nil
+        linkToken = nil
+        await createLinkToken()
+    }
 
     func createLinkToken() async {
         isLoading = true
@@ -28,13 +42,15 @@ final class PlaidConnectionViewModel: ObservableObject {
 
             linkConfiguration = PlaidLinkManager.createConfiguration(
                 linkToken: token
-            ) { publicToken in
+            ) { linkSuccess in
                 Task { @MainActor in
-                    await self.exchangePublicToken(publicToken)
+                    await self.exchangePublicToken(linkSuccess)
                 }
             }
 
-            statusMessage = "Ready to connect bank"
+            statusMessage = hasConnectedInstitutions
+                ? "Ready to connect another bank"
+                : "Ready to connect bank"
         } catch {
             errorMessage = error.localizedDescription
             statusMessage = "Failed to create Link token"
@@ -62,16 +78,40 @@ final class PlaidConnectionViewModel: ObservableObject {
         }
     }
 
-    func exchangePublicToken(_ publicToken: String) async {
+    func exchangePublicToken(_ linkSuccess: PlaidLinkSuccess) async {
         isLoading = true
         errorMessage = nil
 
         do {
-            try await PlaidAPIService.shared.exchangePublicToken(publicToken)
+            try await PlaidAPIService.shared.exchangePublicToken(linkSuccess)
             statusMessage = "Bank linked successfully"
+            didLinkBank = true
+            linkConfiguration = nil
+            linkToken = nil
+            await refreshConnectedAccounts()
         } catch {
             errorMessage = error.localizedDescription
             statusMessage = "Failed to exchange public token"
+        }
+
+        isLoading = false
+    }
+
+    func refreshConnectedAccounts() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let response = try await PlaidAPIService.shared.fetchAccountsResponse()
+            accounts = response.accounts
+            institutions = response.institutions.isEmpty
+                ? fallbackInstitutions(from: response.accounts)
+                : response.institutions
+            linkedItems = try await PlaidAPIService.shared.fetchItems()
+            statusMessage = connectionStatusMessage
+        } catch {
+            errorMessage = error.localizedDescription
+            statusMessage = hasConnectedInstitutions ? "Bank linked" : "Unable to load accounts"
         }
 
         isLoading = false
@@ -120,6 +160,34 @@ final class PlaidConnectionViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    private var connectionStatusMessage: String {
+        if institutions.isEmpty {
+            return accounts.isEmpty ? "Connected" : "\(accounts.count) accounts connected"
+        }
+
+        let bankCount = institutions.count
+        let accountCount = accounts.count
+        let bankLabel = bankCount == 1 ? "bank" : "banks"
+        let accountLabel = accountCount == 1 ? "account" : "accounts"
+        return "\(bankCount) \(bankLabel) · \(accountCount) \(accountLabel)"
+    }
+
+    private func fallbackInstitutions(from accounts: [PlaidAccount]) -> [PlaidInstitutionAccounts] {
+        let grouped = Dictionary(grouping: accounts) { account in
+            account.itemID ?? account.institutionID ?? "unknown"
+        }
+
+        return grouped.map { key, groupedAccounts in
+            PlaidInstitutionAccounts(
+                itemID: key,
+                institutionID: groupedAccounts.first?.institutionID,
+                institutionName: groupedAccounts.first?.institutionName,
+                accounts: groupedAccounts
+            )
+        }
+        .sorted { $0.displayName < $1.displayName }
     }
 
     private func findViewController() -> UIViewController {

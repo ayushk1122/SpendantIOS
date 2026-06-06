@@ -1,6 +1,10 @@
 import SwiftUI
+import SwiftData
 
 struct ProfileView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \UserSettings.createdAt) private var settings: [UserSettings]
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -8,13 +12,46 @@ struct ProfileView: View {
                     profileHeader
 
                     VStack(spacing: 12) {
-                        ProfileRow(title: "Settings", subtitle: "Manage app preferences", icon: "gearshape.fill")
-                        ProfileRow(title: "Protected Balance", subtitle: "Set your minimum checking buffer", icon: "shield.fill")
-                        ProfileRow(title: "Default Allocation", subtitle: "Customize savings, investing, and buffer splits", icon: "slider.horizontal.3")
                         NavigationLink {
-                            PlaidConnectionView()
+                            SettingsView()
                         } label: {
-                            ProfileRow(title: "Account Connections", subtitle: "Connect and test bank data", icon: "link")
+                            ProfileRow(title: "Settings", subtitle: "Manage app preferences", icon: "gearshape.fill")
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            ProfileRow(
+                                title: "Protected Balance",
+                                subtitle: protectedBalanceSubtitle,
+                                icon: "shield.fill"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            ProfileRow(
+                                title: "Default Allocation",
+                                subtitle: allocationSubtitle,
+                                icon: "slider.horizontal.3"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
+                            PlaidConnectionView(
+                                isBankLinked: userSettings?.hasLinkedPlaid == true,
+                                onBankLinked: markBankLinked
+                            )
+                        } label: {
+                            ProfileRow(
+                                title: "Account Connections",
+                                subtitle: bankConnectionSubtitle,
+                                icon: "link"
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -24,6 +61,32 @@ struct ProfileView: View {
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Profile")
         }
+    }
+
+    private var userSettings: UserSettings? {
+        settings.first
+    }
+
+    private var protectedBalanceSubtitle: String {
+        guard let userSettings else {
+            return "Set your minimum checking buffer"
+        }
+
+        return "\(CurrencyFormatter.dollars(userSettings.minimumCheckingBuffer)) minimum checking buffer"
+    }
+
+    private var allocationSubtitle: String {
+        guard let userSettings else {
+            return "Customize savings, investing, and buffer splits"
+        }
+
+        return "\(percent(userSettings.savingsAllocationPercent)) savings, \(percent(userSettings.investmentAllocationPercent)) investing"
+    }
+
+    private var bankConnectionSubtitle: String {
+        userSettings?.hasLinkedPlaid == true
+            ? "Bank linked through Plaid"
+            : "Connect and test bank data"
     }
 
     private var profileHeader: some View {
@@ -44,6 +107,20 @@ struct ProfileView: View {
         .padding()
         .background(Color.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func percent(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
+    private func markBankLinked() {
+        let userSettings = settings.first ?? UserSettings()
+        if settings.isEmpty {
+            modelContext.insert(userSettings)
+        }
+
+        userSettings.hasLinkedPlaid = true
+        try? modelContext.save()
     }
 }
 
@@ -85,5 +162,6 @@ struct ProfileRow: View {
 
 #Preview {
     ProfileView()
+        .modelContainer(for: UserSettings.self, inMemory: true)
         .preferredColorScheme(.dark)
 }

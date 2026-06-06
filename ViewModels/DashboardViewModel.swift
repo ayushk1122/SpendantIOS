@@ -29,15 +29,10 @@ final class DashboardViewModel: ObservableObject {
     @Published var checkingBalance: Double = 0
     @Published var minimumBuffer: Double = 30
     @Published var transactions: [NormalizedTransaction] = []
-
-    let destinations: [MoneyDestination] = [
-        MoneyDestination(name: "Savings Account", percent: 0.40, icon: "banknote.fill"),
-        MoneyDestination(name: "Investments", percent: 0.35, icon: "chart.pie.fill"),
-        MoneyDestination(name: "Retirement", percent: 0.15, icon: "building.columns.fill"),
-        MoneyDestination(name: "Extra Buffer", percent: 0.10, icon: "shield.fill")
-    ]
+    @Published var destinations: [MoneyDestination]
 
     init() {
+        self.destinations = Self.makeDestinations(settings: nil)
         self.result = CashFlowCalculator.calculate(
             inputs: CashFlowInputs(
                 checkingBalance: 110,
@@ -51,28 +46,37 @@ final class DashboardViewModel: ObservableObject {
         )
     }
 
-    func loadDashboardSummary() async {
+    func loadDashboardSummary(settings: UserSettings? = nil) async {
         isLoading = true
         errorMessage = nil
 
         do {
             let summary = try await PlaidAPIService.shared.fetchDashboardSummary()
+            let protectedBalance = settings?.minimumCheckingBuffer ?? summary.protectedBalance
+            let safeToMoveAmount = max(
+                0,
+                summary.projectedMonthEndBalance - protectedBalance
+            )
 
             checkingBalance = summary.checkingBalance
             incomeTotal = summary.incomeTotal
             housingTotal = summary.housingTotal
             expenseTotal = summary.expensesTotal
             subscriptionsTotal = summary.subscriptionsTotal
-            minimumBuffer = summary.protectedBalance
+            minimumBuffer = protectedBalance
             transactions = summary.transactions
+            destinations = Self.makeDestinations(settings: settings)
 
             result = CashFlowResult(
-                safeToMoveAmount: summary.safeToMoveAmount,
-                savingsAllocation: summary.safeToMoveAmount * 0.40,
-                investmentAllocation: summary.safeToMoveAmount * 0.35,
-                extraBufferAllocation: summary.safeToMoveAmount * 0.10,
+                safeToMoveAmount: safeToMoveAmount,
+                savingsAllocation: safeToMoveAmount * (settings?.savingsAllocationPercent ?? 0.40),
+                investmentAllocation: safeToMoveAmount * (settings?.investmentAllocationPercent ?? 0.35),
+                extraBufferAllocation: safeToMoveAmount * (settings?.bufferAllocationPercent ?? 0.10),
                 projectedEndOfMonthBalance: summary.projectedMonthEndBalance,
-                insightMessage: ""
+                insightMessage: Self.insight(
+                    for: safeToMoveAmount,
+                    protectedBalance: protectedBalance
+                )
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -95,6 +99,43 @@ final class DashboardViewModel: ObservableObject {
         } else {
             return .risk
         }
+    }
+
+    private static func makeDestinations(settings: UserSettings?) -> [MoneyDestination] {
+        [
+            MoneyDestination(
+                name: "Savings Account",
+                percent: settings?.savingsAllocationPercent ?? 0.40,
+                icon: "banknote.fill"
+            ),
+            MoneyDestination(
+                name: "Investments",
+                percent: settings?.investmentAllocationPercent ?? 0.35,
+                icon: "chart.pie.fill"
+            ),
+            MoneyDestination(
+                name: "Retirement",
+                percent: settings?.retirementAllocationPercent ?? 0.15,
+                icon: "building.columns.fill"
+            ),
+            MoneyDestination(
+                name: "Extra Buffer",
+                percent: settings?.bufferAllocationPercent ?? 0.10,
+                icon: "shield.fill"
+            )
+        ]
+    }
+
+    private static func insight(for safeToMoveAmount: Double, protectedBalance: Double) -> String {
+        if safeToMoveAmount <= 0 {
+            return "Your projected balance is inside your protected buffer."
+        }
+
+        if safeToMoveAmount < protectedBalance {
+            return "You have room to move money, but keep the month tight."
+        }
+
+        return "You are on track to move money with your protected balance intact."
     }
 }
 
