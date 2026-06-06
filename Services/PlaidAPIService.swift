@@ -22,8 +22,13 @@ final class PlaidAPIService {
         return try JSONDecoder().decode(LinkTokenResponse.self, from: data).linkToken
     }
     
-    func fetchDashboardSummary() async throws -> DashboardSummaryResponse {
-        let url = makeURL(path: "/api/dashboard/summary")
+    func fetchDashboardSummary(protectedBalance: Double? = nil) async throws -> DashboardSummaryResponse {
+        let url = makeURL(
+            path: "/api/dashboard/summary",
+            extraQueryItems: protectedBalance.map {
+                [URLQueryItem(name: "protected_balance", value: String($0))]
+            } ?? []
+        )
         let data = try await performRequest(URLRequest(url: url))
         return try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
     }
@@ -109,7 +114,10 @@ final class PlaidAPIService {
         return prettyJSON(from: data)
     }
 
-    private func makeURL(path: String) -> URL {
+    private func makeURL(
+        path: String,
+        extraQueryItems: [URLQueryItem] = []
+    ) -> URL {
         var components = URLComponents(
             url: APIConfig.baseURL.appending(path: path),
             resolvingAgainstBaseURL: false
@@ -117,7 +125,7 @@ final class PlaidAPIService {
 
         components.queryItems = [
             URLQueryItem(name: "client_user_id", value: APIConfig.clientUserID)
-        ]
+        ] + extraQueryItems
 
         return components.url!
     }
