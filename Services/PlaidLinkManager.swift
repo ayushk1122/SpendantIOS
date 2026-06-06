@@ -4,12 +4,16 @@ import LinkKit
 final class PlaidLinkManager {
     static func createConfiguration(
         linkToken: String,
-        onSuccess: @escaping (String) -> Void
+        onSuccess: @escaping (PlaidLinkSuccess) -> Void
     ) -> LinkTokenConfiguration {
         return LinkTokenConfiguration(token: linkToken) { success in
-            let publicToken = success.publicToken
-            print("PUBLIC TOKEN:", publicToken)
-            onSuccess(publicToken)
+            let institution = success.metadata.institution
+            let result = PlaidLinkSuccess(
+                publicToken: success.publicToken,
+                institutionID: institution.id,
+                institutionName: institution.name
+            )
+            onSuccess(result)
         }
     }
 }
