@@ -10,9 +10,11 @@ private struct HeroCardHeightPreferenceKey: PreferenceKey {
 }
 
 struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \UserSettings.createdAt) private var settings: [UserSettings]
     @StateObject private var viewModel = DashboardViewModel()
     @State private var heroCardHeight: CGFloat = 0
+    @State private var showsDestinationsEditor = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +56,11 @@ struct DashboardView: View {
                 heroCardHeight = height
             }
             .task {
+                if let userSettings = settings.first {
+                    _ = userSettings.resolvedMoneyDestinations()
+                    try? modelContext.save()
+                }
+
                 await viewModel.loadDashboardSummary(settings: settings.first)
             }
             .onChange(of: settings.first?.minimumCheckingBuffer) { _, _ in
@@ -62,8 +69,20 @@ struct DashboardView: View {
                 }
             }
             .onChange(of: settings.first?.savingsAllocationPercent) { _, _ in
-                Task {
-                    await viewModel.loadDashboardSummary(settings: settings.first)
+                viewModel.refreshDestinations(from: settings.first)
+            }
+            .onChange(of: settings.first?.moneyDestinationsData) { _, _ in
+                viewModel.refreshDestinations(from: settings.first)
+            }
+            .sheet(isPresented: $showsDestinationsEditor) {
+                if let userSettings = settings.first {
+                    MoneyDestinationsEditorSheet(
+                        userSettings: userSettings,
+                        safeToMoveAmount: viewModel.result.safeToMoveAmount,
+                        onDestinationsChanged: {
+                            viewModel.refreshDestinations(from: settings.first)
+                        }
+                    )
                 }
             }
         }
@@ -200,13 +219,15 @@ struct DashboardView: View {
 
                 Spacer()
 
-                NavigationLink {
-                    SettingsView()
+                Button {
+                    showsDestinationsEditor = true
                 } label: {
                     Text("Customize")
                         .font(.caption.bold())
                         .foregroundStyle(.green)
                 }
+                .buttonStyle(.plain)
+                .disabled(settings.first == nil)
             }
 
             ForEach(viewModel.destinations) { destination in

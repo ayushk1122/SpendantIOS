@@ -2,17 +2,24 @@ import Foundation
 import Combine
 
 struct MoneyDestination: Identifiable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let percent: Double
     let icon: String
+
+    init(config: MoneyDestinationConfig) {
+        self.id = config.id
+        self.name = config.name
+        self.percent = config.percent
+        self.icon = config.icon
+    }
 
     func amount(from safeToMoveAmount: Double) -> Double {
         safeToMoveAmount * percent
     }
 
     var percentText: String {
-        "\(Int(percent * 100))%"
+        "\(Int((percent * 100).rounded()))%"
     }
 }
 
@@ -119,11 +126,6 @@ final class DashboardViewModel: ObservableObject {
                 0,
                 summary.safeToMoveToday
             )
-            let monthEndSafeToMove = max(
-                0,
-                summary.projectedMonthEndBalance - protectedBalance
-            )
-
             checkingBalance = summary.checkingBalance
             incomeTotal = summary.incomeTotal
             housingTotal = summary.housingTotal
@@ -145,24 +147,53 @@ final class DashboardViewModel: ObservableObject {
             monthlyBreakdown = summary
             destinations = Self.makeDestinations(settings: settings)
 
-            result = CashFlowResult(
+            result = Self.makeCashFlowResult(
                 safeToMoveAmount: safeToMoveTodayAmount,
-                savingsAllocation: safeToMoveTodayAmount * (settings?.savingsAllocationPercent ?? 0.40),
-                investmentAllocation: safeToMoveTodayAmount * (settings?.investmentAllocationPercent ?? 0.35),
-                extraBufferAllocation: safeToMoveTodayAmount * (settings?.bufferAllocationPercent ?? 0.10),
-                projectedEndOfMonthBalance: summary.projectedMonthEndBalance,
-                insightMessage: Self.insight(
-                    for: safeToMoveTodayAmount,
-                    monthEndSafeToMove: monthEndSafeToMove,
-                    protectedBalance: protectedBalance,
-                    lowestDate: summary.lowestProjectedBalanceDate
-                )
+                settings: settings,
+                monthEndBalance: summary.projectedMonthEndBalance,
+                protectedBalance: protectedBalance,
+                lowestDate: summary.lowestProjectedBalanceDate
             )
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    func refreshDestinations(from settings: UserSettings?) {
+        destinations = Self.makeDestinations(settings: settings)
+        result = Self.makeCashFlowResult(
+            safeToMoveAmount: result.safeToMoveAmount,
+            settings: settings,
+            monthEndBalance: result.projectedEndOfMonthBalance,
+            protectedBalance: minimumBuffer,
+            lowestDate: lowestProjectedBalanceDate
+        )
+    }
+
+    private static func makeCashFlowResult(
+        safeToMoveAmount: Double,
+        settings: UserSettings?,
+        monthEndBalance: Double,
+        protectedBalance: Double,
+        lowestDate: String?
+    ) -> CashFlowResult {
+        let monthEndSafeToMove = max(0, monthEndBalance - protectedBalance)
+
+        return CashFlowResult(
+            safeToMoveAmount: safeToMoveAmount,
+            savingsAllocation: safeToMoveAmount * (settings?.savingsAllocationPercent ?? 0.40),
+            investmentAllocation: safeToMoveAmount * (settings?.investmentAllocationPercent ?? 0.35),
+            extraBufferAllocation: safeToMoveAmount * (settings?.bufferAllocationPercent ?? 0.10),
+            projectedEndOfMonthBalance: monthEndBalance,
+            insightMessage: Self.insight(
+                for: safeToMoveAmount,
+                monthEndSafeToMove: monthEndSafeToMove,
+                protectedBalance: protectedBalance,
+                lowestDate: lowestDate
+            )
+        )
     }
 
     func breakdown(for bucket: CashFlowBucket) -> MonthlyBucketBreakdown {
@@ -205,28 +236,8 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private static func makeDestinations(settings: UserSettings?) -> [MoneyDestination] {
-        [
-            MoneyDestination(
-                name: "Savings Account",
-                percent: settings?.savingsAllocationPercent ?? 0.40,
-                icon: "banknote.fill"
-            ),
-            MoneyDestination(
-                name: "Investments",
-                percent: settings?.investmentAllocationPercent ?? 0.35,
-                icon: "chart.pie.fill"
-            ),
-            MoneyDestination(
-                name: "Retirement",
-                percent: settings?.retirementAllocationPercent ?? 0.15,
-                icon: "building.columns.fill"
-            ),
-            MoneyDestination(
-                name: "Extra Buffer",
-                percent: settings?.bufferAllocationPercent ?? 0.10,
-                icon: "shield.fill"
-            )
-        ]
+        let configs = settings?.resolvedMoneyDestinations() ?? MoneyDestinationConfig.defaults
+        return configs.map(MoneyDestination.init(config:))
     }
 
     private static func makeProjectedSafePoints(
