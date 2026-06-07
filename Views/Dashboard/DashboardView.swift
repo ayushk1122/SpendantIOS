@@ -1,15 +1,32 @@
 import SwiftUI
 import SwiftData
 
+private struct HeroCardHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct DashboardView: View {
     @Query(sort: \UserSettings.createdAt) private var settings: [UserSettings]
     @StateObject private var viewModel = DashboardViewModel()
+    @State private var heroCardHeight: CGFloat = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     heroCard
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: HeroCardHeightPreferenceKey.self,
+                                    value: geometry.size.height
+                                )
+                            }
+                        )
                     projectionChartSection
                     breakdownSection
                     destinationsCard
@@ -33,6 +50,9 @@ struct DashboardView: View {
             }
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .onPreferenceChange(HeroCardHeightPreferenceKey.self) { height in
+                heroCardHeight = height
+            }
             .task {
                 await viewModel.loadDashboardSummary(settings: settings.first)
             }
@@ -81,7 +101,7 @@ struct DashboardView: View {
     }
 
     private var projectionChartSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        Group {
             if viewModel.projectedSafePoints.isEmpty {
                 Text("Projection will appear once cash-flow data is available.")
                     .font(.subheadline)
@@ -92,19 +112,20 @@ struct DashboardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 projectionChart
-                    .frame(height: 285)
             }
         }
-        .padding()
-        .background(Color.white.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var chartSectionHeight: CGFloat {
+        heroCardHeight > 0 ? heroCardHeight : 208
     }
 
     private var projectionChart: some View {
         ProjectedSafeLineGraph(
             points: viewModel.projectedSafePoints,
             today: Date(),
-            protectedBalance: viewModel.minimumBuffer
+            protectedBalance: viewModel.minimumBuffer,
+            sectionHeight: chartSectionHeight
         )
     }
 
@@ -239,8 +260,13 @@ struct ProjectedSafeLineGraph: View {
     let points: [ProjectedSafePoint]
     let today: Date
     let protectedBalance: Double
+    let sectionHeight: CGFloat
 
     @State private var selectedIndex: Int?
+
+    private var plotHeight: CGFloat {
+        max(120, sectionHeight - 28)
+    }
 
     private var maxSafeToMove: Double {
         max(points.map(\.safeToMove).max() ?? 1, 1)
@@ -264,7 +290,8 @@ struct ProjectedSafeLineGraph: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
+            VStack(spacing: 12) {
             GeometryReader { proxy in
                 let size = proxy.size
                 let chartPoints = mappedPoints(in: size)
@@ -353,6 +380,7 @@ struct ProjectedSafeLineGraph: View {
                         }
                 )
             }
+            .frame(height: plotHeight)
 
             HStack {
                 if let firstDate {
@@ -367,6 +395,8 @@ struct ProjectedSafeLineGraph: View {
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+            }
+            .frame(height: sectionHeight, alignment: .top)
 
             if let selectedPoint {
                 selectedPointCard(selectedPoint)
@@ -381,7 +411,8 @@ struct ProjectedSafeLineGraph: View {
 
     private func selectedPointCard(_ point: ProjectedSafePoint) -> some View {
         let visibleEvents = point.events.filter { event in
-            !event.displayLabel.lowercased().contains("projected spending")
+            abs(event.amount) > 0.01
+                && !event.displayLabel.lowercased().contains("projected spending")
         }
         let primaryEvent = visibleEvents.first
 

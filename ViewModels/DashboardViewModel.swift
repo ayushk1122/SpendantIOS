@@ -25,7 +25,7 @@ struct ProjectedSafePoint: Identifiable {
     let events: [ProjectedSafeEvent]
 
     var hasEvent: Bool {
-        abs(eventAmount) > 0.01
+        events.contains { abs($0.amount) > 0.01 }
     }
 
     var isCashOutflow: Bool {
@@ -297,10 +297,7 @@ final class DashboardViewModel: ObservableObject {
                 .reduce(0, +)
             balance += eventAmount
 
-            var safeToMove = max(0, balance - protectedBalance)
-            if calendar.isDate(currentDate, inSameDayAs: today) {
-                safeToMove = max(0, summary.safeToMoveToday)
-            }
+            let safeToMove = max(0, balance - protectedBalance)
 
             points.append(
                 ProjectedSafePoint(
