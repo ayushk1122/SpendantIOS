@@ -22,14 +22,49 @@ final class PlaidAPIService {
         return try JSONDecoder().decode(LinkTokenResponse.self, from: data).linkToken
     }
     
-    func fetchDashboardSummary(protectedBalance: Double? = nil) async throws -> DashboardSummaryResponse {
+    func fetchDashboardSummary(
+        protectedBalance: Double? = nil,
+        month: DashboardMonth? = nil
+    ) async throws -> DashboardSummaryResponse {
+        var queryItems: [URLQueryItem] = []
+        if let protectedBalance {
+            queryItems.append(URLQueryItem(name: "protected_balance", value: String(protectedBalance)))
+        }
+        if let month, !month.isCurrentMonth {
+            queryItems.append(URLQueryItem(name: "month", value: month.apiValue))
+        }
+
         let url = makeURL(
             path: "/api/dashboard/summary",
-            extraQueryItems: protectedBalance.map {
-                [URLQueryItem(name: "protected_balance", value: String($0))]
-            } ?? []
+            extraQueryItems: queryItems
         )
         let data = try await performRequest(URLRequest(url: url))
+        return try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
+    }
+
+    func finalizeDashboardSnapshot(
+        month: DashboardMonth,
+        protectedBalance: Double?,
+        destinations: [MoneyDestinationConfig]
+    ) async throws -> DashboardSummaryResponse {
+        let url = makeURL(
+            path: "/api/dashboard/snapshots/finalize",
+            extraQueryItems: [
+                URLQueryItem(name: "month", value: month.apiValue)
+            ]
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            FinalizeDashboardSnapshotRequest(
+                protectedBalance: protectedBalance,
+                destinations: destinations
+            )
+        )
+
+        let data = try await performRequest(request)
         return try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
     }
 

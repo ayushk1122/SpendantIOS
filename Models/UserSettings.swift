@@ -13,6 +13,9 @@ final class UserSettings {
     var investmentAllocationPercent: Double
     var retirementAllocationPercent: Double
     var bufferAllocationPercent: Double
+    var moneyDestinationsData: Data?
+    var dashboardSectionOrderData: Data?
+    var lastFinalizedSnapshotMonth: String?
     var createdAt: Date
 
     init(
@@ -25,6 +28,9 @@ final class UserSettings {
         investmentAllocationPercent: Double = 0.35,
         retirementAllocationPercent: Double = 0.15,
         bufferAllocationPercent: Double = 0.10,
+        moneyDestinationsData: Data? = nil,
+        dashboardSectionOrderData: Data? = nil,
+        lastFinalizedSnapshotMonth: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = UUID()
@@ -37,6 +43,9 @@ final class UserSettings {
         self.investmentAllocationPercent = investmentAllocationPercent
         self.retirementAllocationPercent = retirementAllocationPercent
         self.bufferAllocationPercent = bufferAllocationPercent
+        self.moneyDestinationsData = moneyDestinationsData
+        self.dashboardSectionOrderData = dashboardSectionOrderData
+        self.lastFinalizedSnapshotMonth = lastFinalizedSnapshotMonth
         self.createdAt = createdAt
     }
 
@@ -48,23 +57,14 @@ final class UserSettings {
     }
 
     func applyBalancedAllocation() {
-        savingsAllocationPercent = 0.40
-        investmentAllocationPercent = 0.35
-        retirementAllocationPercent = 0.15
-        bufferAllocationPercent = 0.10
+        applyBalancedMoneyDestinations()
     }
 
     func applyConservativeAllocation() {
-        savingsAllocationPercent = 0.50
-        investmentAllocationPercent = 0.20
-        retirementAllocationPercent = 0.10
-        bufferAllocationPercent = 0.20
+        applyConservativeMoneyDestinations()
     }
 
     func applyGrowthAllocation() {
-        savingsAllocationPercent = 0.25
-        investmentAllocationPercent = 0.45
-        retirementAllocationPercent = 0.20
-        bufferAllocationPercent = 0.10
+        applyGrowthMoneyDestinations()
     }
 }

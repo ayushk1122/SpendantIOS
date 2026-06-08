@@ -8,11 +8,6 @@ struct MainTabView: View {
                     Label("Home", systemImage: "house.fill")
                 }
 
-            GoalsView()
-                .tabItem {
-                    Label("Goals", systemImage: "target")
-                }
-
             ProfileView()
                 .tabItem {
                     Label("Profile", systemImage: "person.crop.circle.fill")
