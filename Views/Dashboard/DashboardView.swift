@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 private struct HeroCardHeightPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -15,11 +16,15 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var heroCardHeight: CGFloat = 0
     @State private var showsDestinationsEditor = false
+    @State private var sectionOrder: [DashboardSection] = DashboardSection.defaultOrder
+    @State private var draggedSection: DashboardSection?
+    @State private var selectedBreakdownBucket: CashFlowBucket?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    monthPicker
                     heroCard
                         .background(
                             GeometryReader { geometry in
@@ -29,9 +34,15 @@ struct DashboardView: View {
                                 )
                             }
                         )
-                    projectionChartSection
-                    breakdownSection
-                    destinationsCard
+                    ForEach(sectionOrder) { section in
+                        sectionContent(for: section)
+                            .reorderableDashboardBubble(
+                                section,
+                                draggedSection: $draggedSection,
+                                sectionOrder: $sectionOrder,
+                                onReorder: persistSectionOrder
+                            )
+                    }
 
                     if viewModel.isLoading {
                         ProgressView()
@@ -56,8 +67,16 @@ struct DashboardView: View {
                 heroCardHeight = height
             }
             .task {
-                if let userSettings = settings.first {
+                if var userSettings = settings.first {
                     _ = userSettings.resolvedMoneyDestinations()
+                    sectionOrder = userSettings.resolvedDashboardSectionOrder()
+
+                    if let updatedSettings = await viewModel.finalizePreviousMonthSnapshotIfNeeded(
+                        settings: userSettings
+                    ) {
+                        userSettings = updatedSettings
+                    }
+
                     try? modelContext.save()
                 }
 
@@ -74,6 +93,18 @@ struct DashboardView: View {
             .onChange(of: settings.first?.moneyDestinationsData) { _, _ in
                 viewModel.refreshDestinations(from: settings.first)
             }
+            .navigationDestination(item: $selectedBreakdownBucket) { bucket in
+                CashFlowView(
+                    bucket: bucket,
+                    breakdown: viewModel.breakdown(for: bucket),
+                    transactions: viewModel.transactions,
+                    recurringStreams: viewModel.recurringStreams,
+                    creditCardObligations: viewModel.creditCardObligations,
+                    cashFlowEvents: viewModel.cashFlowEvents,
+                    selectedMonth: viewModel.selectedMonth,
+                    isHistoricalMode: viewModel.isHistoricalMode
+                )
+            }
             .sheet(isPresented: $showsDestinationsEditor) {
                 if let userSettings = settings.first {
                     MoneyDestinationsEditorSheet(
@@ -88,10 +119,83 @@ struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
+    private func sectionContent(for section: DashboardSection) -> some View {
+        switch section {
+        case .projectionChart:
+            projectionChartSection
+        case .destinations:
+            destinationsCard
+        case .income, .housing, .expenses, .subscriptions, .transfers:
+            if let bucket = section.cashFlowBucket {
+                breakdownLink(
+                    bucket: bucket,
+                    amount: amount(for: bucket)
+                )
+            }
+        }
+    }
+
+    private func amount(for bucket: CashFlowBucket) -> Double {
+        switch bucket {
+        case .income:
+            return viewModel.incomeTotal
+        case .housing:
+            return viewModel.housingTotal
+        case .expenses:
+            return viewModel.expenseTotal
+        case .subscriptions:
+            return viewModel.subscriptionsTotal
+        case .transfers:
+            return viewModel.transferTotal
+        }
+    }
+
+    private func persistSectionOrder() {
+        guard let userSettings = settings.first else {
+            return
+        }
+
+        userSettings.setDashboardSectionOrder(sectionOrder)
+        try? modelContext.save()
+    }
+
+    private var monthPicker: some View {
+        Menu {
+            ForEach(DashboardMonth.recentMonths()) { month in
+                Button {
+                    Task {
+                        await viewModel.selectMonth(month, settings: settings.first)
+                    }
+                } label: {
+                    if month == viewModel.selectedMonth {
+                        Label(month.menuLabel, systemImage: "checkmark")
+                    } else {
+                        Text(month.menuLabel)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(viewModel.selectedMonth.menuLabel)
+                    .font(.headline)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.bold())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.08))
+            .clipShape(Capsule())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Safe to Move Today")
+                Text(viewModel.selectedMonth.heroTitle)
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.72))
 
@@ -109,7 +213,7 @@ struct DashboardView: View {
                 .font(.system(size: 48, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            Text("Amount you can safely move while maintaining your account balance buffer.")
+            Text(viewModel.selectedMonth.heroSubtitle)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
@@ -122,7 +226,11 @@ struct DashboardView: View {
     private var projectionChartSection: some View {
         Group {
             if viewModel.projectedSafePoints.isEmpty {
-                Text("Projection will appear once cash-flow data is available.")
+                Text(
+                    viewModel.isHistoricalMode
+                        ? "Cash-flow history will appear once posted transactions are available for this month."
+                        : "Projection will appear once cash-flow data is available."
+                )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,7 +250,9 @@ struct DashboardView: View {
     private var projectionChart: some View {
         ProjectedSafeLineGraph(
             points: viewModel.projectedSafePoints,
-            today: Date(),
+            today: viewModel.isHistoricalMode
+                ? viewModel.selectedMonth.endDate
+                : Date(),
             protectedBalance: viewModel.minimumBuffer,
             sectionHeight: chartSectionHeight
         )
@@ -154,45 +264,9 @@ struct DashboardView: View {
         return formatter.string(from: date)
     }
 
-    private var breakdownSection: some View {
-        VStack(spacing: 14) {
-            breakdownLink(
-                bucket: .income,
-                amount: viewModel.incomeTotal
-            )
-
-            breakdownLink(
-                bucket: .housing,
-                amount: viewModel.housingTotal
-            )
-
-            breakdownLink(
-                bucket: .expenses,
-                amount: viewModel.expenseTotal
-            )
-
-            breakdownLink(
-                bucket: .subscriptions,
-                amount: viewModel.subscriptionsTotal
-            )
-
-            breakdownLink(
-                bucket: .transfers,
-                amount: viewModel.transferTotal
-            )
-        }
-    }
-
     private func breakdownLink(bucket: CashFlowBucket, amount: Double) -> some View {
-        NavigationLink {
-            CashFlowView(
-                bucket: bucket,
-                breakdown: viewModel.breakdown(for: bucket),
-                transactions: viewModel.transactions,
-                recurringStreams: viewModel.recurringStreams,
-                creditCardObligations: viewModel.creditCardObligations,
-                cashFlowEvents: viewModel.cashFlowEvents
-            )
+        Button {
+            selectedBreakdownBucket = bucket
         } label: {
             BreakdownCard(
                 title: bucket.title,
@@ -212,22 +286,28 @@ struct DashboardView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
 
-                    Text("Suggested split for your safe-to-move amount.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        viewModel.isHistoricalMode
+                            ? "How your month-end safe-to-move amount would be split."
+                            : "Suggested split for your safe-to-move amount."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Button {
-                    showsDestinationsEditor = true
-                } label: {
-                    Text("Customize")
-                        .font(.caption.bold())
-                        .foregroundStyle(.green)
+                if !viewModel.isHistoricalMode {
+                    Button {
+                        showsDestinationsEditor = true
+                    } label: {
+                        Text("Customize")
+                            .font(.caption.bold())
+                            .foregroundStyle(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(settings.first == nil)
                 }
-                .buttonStyle(.plain)
-                .disabled(settings.first == nil)
             }
 
             ForEach(viewModel.destinations) { destination in
@@ -266,6 +346,10 @@ struct DashboardView: View {
     }
 
     private var statusLabel: String {
+        if viewModel.isHistoricalMode {
+            return "Review"
+        }
+
         switch viewModel.statusColor {
         case .healthy:
             return "Healthy"

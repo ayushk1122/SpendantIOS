@@ -1,6 +1,10 @@
 import Foundation
 
 struct DashboardSummaryResponse: Decodable {
+    let month: String?
+    let isHistorical: Bool
+    let snapshotSource: String
+    let snapshotFinalizedAt: String?
     let checkingBalance: Double
     let incomeTotal: Double
     let housingTotal: Double
@@ -26,8 +30,13 @@ struct DashboardSummaryResponse: Decodable {
     let recurringStreams: [RecurringStream]
     let creditCardObligations: [CreditCardObligation]
     let cashFlowEvents: [CashFlowEvent]
+    let moneyDestinations: [MoneyDestinationSnapshot]?
 
     enum CodingKeys: String, CodingKey {
+        case month
+        case isHistorical = "is_historical"
+        case snapshotSource = "snapshot_source"
+        case snapshotFinalizedAt = "snapshot_finalized_at"
         case checkingBalance = "checking_balance"
         case incomeTotal = "income_total"
         case housingTotal = "housing_total"
@@ -53,10 +62,15 @@ struct DashboardSummaryResponse: Decodable {
         case recurringStreams = "recurring_streams"
         case creditCardObligations = "credit_card_obligations"
         case cashFlowEvents = "cash_flow_events"
+        case moneyDestinations = "money_destinations"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        month = try container.decodeIfPresent(String.self, forKey: .month)
+        isHistorical = try container.decodeIfPresent(Bool.self, forKey: .isHistorical) ?? false
+        snapshotSource = try container.decodeIfPresent(String.self, forKey: .snapshotSource) ?? "live"
+        snapshotFinalizedAt = try container.decodeIfPresent(String.self, forKey: .snapshotFinalizedAt)
         checkingBalance = try container.decode(Double.self, forKey: .checkingBalance)
         incomeTotal = try container.decode(Double.self, forKey: .incomeTotal)
         housingTotal = try container.decode(Double.self, forKey: .housingTotal)
@@ -107,6 +121,10 @@ struct DashboardSummaryResponse: Decodable {
             [CashFlowEvent].self,
             forKey: .cashFlowEvents
         ) ?? []
+        moneyDestinations = try container.decodeIfPresent(
+            [MoneyDestinationSnapshot].self,
+            forKey: .moneyDestinations
+        )
     }
 
     func breakdown(for bucket: CashFlowBucket) -> MonthlyBucketBreakdown {
@@ -375,7 +393,8 @@ enum CashFlowBucket: String, CaseIterable, Identifiable {
 
     func recurringStreams(
         from allStreams: [RecurringStream],
-        currentMonthTransactionIDs: Set<String>
+        currentMonthTransactionIDs: Set<String>,
+        month: DashboardMonth = .current
     ) -> [RecurringStream] {
         guard supportsUpcomingRecurring else {
             return []
@@ -386,7 +405,7 @@ enum CashFlowBucket: String, CaseIterable, Identifiable {
                 return false
             }
 
-            guard CashFlowDate.isCurrentMonth(stream.predictedNextDate) else {
+            guard CashFlowDate.isInMonth(stream.predictedNextDate, month: month) else {
                 return false
             }
 
@@ -407,11 +426,17 @@ enum CashFlowDate {
     }
 
     static func isCurrentMonth(_ value: String?) -> Bool {
+        isInMonth(value, month: DashboardMonth.current)
+    }
+
+    static func isInMonth(_ value: String?, month: DashboardMonth) -> Bool {
         guard let date = date(from: value) else {
             return false
         }
 
-        return Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month)
+        let calendar = Calendar.current
+        return calendar.component(.year, from: date) == month.year
+            && calendar.component(.month, from: date) == month.month
     }
 
     static func formatted(_ value: String?) -> String? {

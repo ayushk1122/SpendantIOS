@@ -14,6 +14,8 @@ final class UserSettings {
     var retirementAllocationPercent: Double
     var bufferAllocationPercent: Double
     var moneyDestinationsData: Data?
+    var dashboardSectionOrderData: Data?
+    var lastFinalizedSnapshotMonth: String?
     var createdAt: Date
 
     init(
@@ -27,6 +29,8 @@ final class UserSettings {
         retirementAllocationPercent: Double = 0.15,
         bufferAllocationPercent: Double = 0.10,
         moneyDestinationsData: Data? = nil,
+        dashboardSectionOrderData: Data? = nil,
+        lastFinalizedSnapshotMonth: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = UUID()
@@ -40,6 +44,8 @@ final class UserSettings {
         self.retirementAllocationPercent = retirementAllocationPercent
         self.bufferAllocationPercent = bufferAllocationPercent
         self.moneyDestinationsData = moneyDestinationsData
+        self.dashboardSectionOrderData = dashboardSectionOrderData
+        self.lastFinalizedSnapshotMonth = lastFinalizedSnapshotMonth
         self.createdAt = createdAt
     }
 

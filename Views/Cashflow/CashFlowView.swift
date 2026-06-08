@@ -7,6 +7,8 @@ struct CashFlowView: View {
     let recurringStreams: [RecurringStream]
     var creditCardObligations: [CreditCardObligation] = []
     var cashFlowEvents: [CashFlowEvent] = []
+    var selectedMonth: DashboardMonth = .current
+    var isHistoricalMode: Bool = false
 
     private var currentMonthTransactionIDs: Set<String> {
         Set(transactions.map(\.transactionID))
@@ -17,9 +19,14 @@ struct CashFlowView: View {
     }
 
     private var upcomingRecurringStreams: [RecurringStream] {
-        bucket.recurringStreams(
+        guard !isHistoricalMode else {
+            return []
+        }
+
+        return bucket.recurringStreams(
             from: recurringStreams,
-            currentMonthTransactionIDs: currentMonthTransactionIDs
+            currentMonthTransactionIDs: currentMonthTransactionIDs,
+            month: selectedMonth
         )
     }
 
@@ -36,7 +43,7 @@ struct CashFlowView: View {
     }
 
     private var upcomingProjectedEvents: [CashFlowEvent] {
-        guard bucket.supportsUpcomingRecurring, bucket != .transfers else {
+        guard !isHistoricalMode, bucket.supportsUpcomingRecurring, bucket != .transfers else {
             return []
         }
 
@@ -48,7 +55,7 @@ struct CashFlowView: View {
                     return false
                 }
 
-                guard CashFlowDate.isCurrentMonth(event.date) else {
+                guard CashFlowDate.isInMonth(event.date, month: selectedMonth) else {
                     return false
                 }
 
@@ -125,7 +132,7 @@ struct CashFlowView: View {
             .padding()
         }
         .background(Color.black.ignoresSafeArea())
-        .navigationTitle(bucket.title)
+        .navigationTitle(isHistoricalMode ? "\(bucket.title) · \(selectedMonth.shortLabel)" : bucket.title)
     }
 
     private func postedCardPayments(for obligation: CreditCardObligation) -> [PostedCardPayment] {

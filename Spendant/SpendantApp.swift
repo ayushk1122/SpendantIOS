@@ -13,7 +13,6 @@ struct SpendantApp: App {
             FixedExpense.self,
             Subscription.self,
             CreditCardBalance.self,
-            FinancialGoal.self,
             UserSettings.self
         ])
     }

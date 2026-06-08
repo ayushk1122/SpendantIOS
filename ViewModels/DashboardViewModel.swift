@@ -96,6 +96,8 @@ final class DashboardViewModel: ObservableObject {
     @Published var lowestProjectedBalanceDate: String?
     @Published var projectedSafePoints: [ProjectedSafePoint] = []
     @Published var destinations: [MoneyDestination]
+    @Published var selectedMonth: DashboardMonth = .current
+    @Published var isHistoricalMode: Bool = false
 
     init() {
         self.destinations = Self.makeDestinations(settings: nil)
@@ -112,19 +114,28 @@ final class DashboardViewModel: ObservableObject {
         )
     }
 
-    func loadDashboardSummary(settings: UserSettings? = nil) async {
+    func loadDashboardSummary(
+        settings: UserSettings? = nil,
+        month: DashboardMonth? = nil
+    ) async {
+        if let month {
+            selectedMonth = month
+        }
+
         isLoading = true
         errorMessage = nil
 
         do {
             let requestedProtectedBalance = settings?.minimumCheckingBuffer
             let summary = try await PlaidAPIService.shared.fetchDashboardSummary(
-                protectedBalance: requestedProtectedBalance
+                protectedBalance: requestedProtectedBalance,
+                month: selectedMonth
             )
             let protectedBalance = requestedProtectedBalance ?? summary.protectedBalance
+            isHistoricalMode = summary.isHistorical || selectedMonth.isHistorical
             let safeToMoveTodayAmount = max(
                 0,
-                summary.safeToMoveToday
+                isHistoricalMode ? summary.safeToMoveAmount : summary.safeToMoveToday
             )
             checkingBalance = summary.checkingBalance
             incomeTotal = summary.incomeTotal
@@ -142,17 +153,21 @@ final class DashboardViewModel: ObservableObject {
             lowestProjectedBalanceDate = summary.lowestProjectedBalanceDate
             projectedSafePoints = Self.makeProjectedSafePoints(
                 summary: summary,
-                protectedBalance: protectedBalance
+                protectedBalance: protectedBalance,
+                selectedMonth: selectedMonth,
+                isHistoricalMode: isHistoricalMode
             )
             monthlyBreakdown = summary
-            destinations = Self.makeDestinations(settings: settings)
+            destinations = Self.makeDestinations(settings: settings, summary: summary)
 
             result = Self.makeCashFlowResult(
                 safeToMoveAmount: safeToMoveTodayAmount,
                 settings: settings,
                 monthEndBalance: summary.projectedMonthEndBalance,
                 protectedBalance: protectedBalance,
-                lowestDate: summary.lowestProjectedBalanceDate
+                lowestDate: summary.lowestProjectedBalanceDate,
+                selectedMonth: selectedMonth,
+                isHistoricalMode: isHistoricalMode
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -161,15 +176,41 @@ final class DashboardViewModel: ObservableObject {
         isLoading = false
     }
 
+    func finalizePreviousMonthSnapshotIfNeeded(settings: UserSettings?) async -> UserSettings? {
+        guard let settings,
+              let previousMonth = DashboardMonth.previous,
+              settings.lastFinalizedSnapshotMonth != previousMonth.apiValue else {
+            return settings
+        }
+
+        do {
+            _ = try await PlaidAPIService.shared.finalizeDashboardSnapshot(
+                month: previousMonth,
+                protectedBalance: settings.minimumCheckingBuffer,
+                destinations: settings.resolvedMoneyDestinations()
+            )
+            settings.lastFinalizedSnapshotMonth = previousMonth.apiValue
+            return settings
+        } catch {
+            return settings
+        }
+    }
+
     func refreshDestinations(from settings: UserSettings?) {
-        destinations = Self.makeDestinations(settings: settings)
+        destinations = Self.makeDestinations(settings: settings, summary: monthlyBreakdown)
         result = Self.makeCashFlowResult(
             safeToMoveAmount: result.safeToMoveAmount,
             settings: settings,
             monthEndBalance: result.projectedEndOfMonthBalance,
             protectedBalance: minimumBuffer,
-            lowestDate: lowestProjectedBalanceDate
+            lowestDate: lowestProjectedBalanceDate,
+            selectedMonth: selectedMonth,
+            isHistoricalMode: isHistoricalMode
         )
+    }
+
+    func selectMonth(_ month: DashboardMonth, settings: UserSettings?) async {
+        await loadDashboardSummary(settings: settings, month: month)
     }
 
     private static func makeCashFlowResult(
@@ -177,7 +218,9 @@ final class DashboardViewModel: ObservableObject {
         settings: UserSettings?,
         monthEndBalance: Double,
         protectedBalance: Double,
-        lowestDate: String?
+        lowestDate: String?,
+        selectedMonth: DashboardMonth,
+        isHistoricalMode: Bool
     ) -> CashFlowResult {
         let monthEndSafeToMove = max(0, monthEndBalance - protectedBalance)
 
@@ -191,7 +234,9 @@ final class DashboardViewModel: ObservableObject {
                 for: safeToMoveAmount,
                 monthEndSafeToMove: monthEndSafeToMove,
                 protectedBalance: protectedBalance,
-                lowestDate: lowestDate
+                lowestDate: lowestDate,
+                selectedMonth: selectedMonth,
+                isHistoricalMode: isHistoricalMode
             )
         )
     }
@@ -235,28 +280,36 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
-    private static func makeDestinations(settings: UserSettings?) -> [MoneyDestination] {
+    private static func makeDestinations(
+        settings: UserSettings?,
+        summary: DashboardSummaryResponse? = nil
+    ) -> [MoneyDestination] {
+        if summary?.isHistorical == true,
+           let snapshotDestinations = summary?.moneyDestinations,
+           !snapshotDestinations.isEmpty {
+            return snapshotDestinations
+                .map { MoneyDestination(config: $0.toConfig()) }
+        }
+
         let configs = settings?.resolvedMoneyDestinations() ?? MoneyDestinationConfig.defaults
         return configs.map(MoneyDestination.init(config:))
     }
 
     private static func makeProjectedSafePoints(
         summary: DashboardSummaryResponse,
-        protectedBalance: Double
+        protectedBalance: Double,
+        selectedMonth: DashboardMonth,
+        isHistoricalMode: Bool
     ) -> [ProjectedSafePoint] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let startDate = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: today)
-        ) ?? today
+        let startDate = selectedMonth.startDate
+        let monthEnd = selectedMonth.endDate
         let eventDates = summary.cashFlowEvents.compactMap { CashFlowDate.date(from: $0.date) }
         let latestEventDate = eventDates.max()
-        let monthEnd = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: today)
-        )
-            .flatMap { calendar.date(byAdding: DateComponents(month: 1, day: -1), to: $0) }
-            ?? today
-        let endDate = max(monthEnd, latestEventDate ?? monthEnd)
+        let endDate = isHistoricalMode
+            ? monthEnd
+            : max(monthEnd, latestEventDate ?? monthEnd)
         let postedEvents = summary.transactions.compactMap { transaction -> (Date, ProjectedSafeEvent)? in
             guard let date = CashFlowDate.date(from: transaction.date) else {
                 return nil
@@ -275,29 +328,39 @@ final class DashboardViewModel: ObservableObject {
                 )
             )
         }
-        let projectedEvents = summary.cashFlowEvents.compactMap { event -> (Date, ProjectedSafeEvent)? in
-            guard let date = CashFlowDate.date(from: event.date) else {
-                return nil
-            }
+        let projectedEvents = isHistoricalMode
+            ? []
+            : summary.cashFlowEvents.compactMap { event -> (Date, ProjectedSafeEvent)? in
+                guard let date = CashFlowDate.date(from: event.date) else {
+                    return nil
+                }
 
-            return (
-                calendar.startOfDay(for: date),
-                ProjectedSafeEvent(
-                    label: event.label,
-                    amount: event.amount,
-                    bucket: event.bucket,
-                    source: event.source
+                return (
+                    calendar.startOfDay(for: date),
+                    ProjectedSafeEvent(
+                        label: event.label,
+                        amount: event.amount,
+                        bucket: event.bucket,
+                        source: event.source
+                    )
                 )
-            )
-        }
+            }
         let allEvents = postedEvents + projectedEvents
         let eventsByDay = Dictionary(grouping: allEvents, by: { $0.0 })
-        let postedThroughToday = postedEvents
-            .filter { $0.0 <= today }
-            .map { $0.1.amount }
-            .reduce(0, +)
 
-        var balance = summary.checkingBalance - postedThroughToday
+        var balance: Double
+        if isHistoricalMode {
+            let netMonthFlow = postedEvents
+                .map(\.1.amount)
+                .reduce(0, +)
+            balance = summary.projectedMonthEndBalance - netMonthFlow
+        } else {
+            let postedThroughToday = postedEvents
+                .filter { $0.0 <= today }
+                .map { $0.1.amount }
+                .reduce(0, +)
+            balance = summary.checkingBalance - postedThroughToday
+        }
         var points: [ProjectedSafePoint] = []
         var currentDate = startDate
 
@@ -333,8 +396,18 @@ final class DashboardViewModel: ObservableObject {
         for safeToMoveAmount: Double,
         monthEndSafeToMove: Double,
         protectedBalance: Double,
-        lowestDate: String?
+        lowestDate: String?,
+        selectedMonth: DashboardMonth,
+        isHistoricalMode: Bool
     ) -> String {
+        if isHistoricalMode {
+            if safeToMoveAmount <= 0 {
+                return "After \(selectedMonth.shortLabel) spending, your checking balance stayed inside your protected buffer."
+            }
+
+            return "You finished \(selectedMonth.shortLabel) with \(CurrencyFormatter.dollars(safeToMoveAmount)) available to move after your buffer."
+        }
+
         if safeToMoveAmount <= 0 {
             if let lowestDate, let formatted = CashFlowDate.formatted(lowestDate) {
                 return "Your checking balance is projected to dip below your protected buffer around \(formatted)."
